@@ -20,6 +20,8 @@
       --void: #9d4edd;
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
     }
     
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
@@ -35,13 +37,13 @@
       color: white;
     }
     
-    /* CRT Scanline Overlay for "Attractive" retro feel */
+    /* CRT Scanline Overlay */
     #crt-overlay {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
       background-size: 100% 2px, 3px 100%;
       pointer-events: none;
-      z-index: 11; /* Above canvas, below UI */
+      z-index: 11; 
       opacity: 0.3;
     }
 
@@ -56,20 +58,20 @@
 
     .top-bar {
       display: flex; justify-content: space-between; align-items: flex-start;
-      padding: 15px 20px;
+      padding: 15px 10px; /* Reduced horizontal padding for mobile */
       background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
     }
 
     .stat-group { display: flex; flex-direction: column; gap: 2px; }
     .stat-label { font-size: 9px; letter-spacing: 1.5px; color: rgba(255,255,255,0.5); text-transform: uppercase; }
     .stat-value { 
-      font-family: 'Orbitron', sans-serif; font-size: clamp(18px, 5vw, 28px); font-weight: 700; 
+      font-family: 'Orbitron', sans-serif; font-size: clamp(16px, 5vw, 28px); font-weight: 700; 
       color: var(--accent); text-shadow: 0 0 15px var(--accent);
       transition: color 0.3s, text-shadow 0.3s;
     }
     
-    .credits-display { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); text-align: center; }
-    .credits-val { font-family: 'Orbitron', sans-serif; font-size: clamp(12px, 3vw, 16px); color: var(--void); text-shadow: 0 0 10px var(--void); }
+    .credits-display { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); text-align: center; width: 120px; }
+    .credits-val { font-family: 'Orbitron', sans-serif; font-size: clamp(10px, 3vw, 16px); color: var(--void); text-shadow: 0 0 10px var(--void); }
     .credits-lbl { font-size: 8px; color: rgba(255,255,255,0.4); }
 
     .bottom-ui {
@@ -78,7 +80,6 @@
       display: flex; flex-direction: column; align-items: center; gap: 10px;
     }
     
-    /* Power-up display */
     .active-powerup {
       position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
       font-family: 'Orbitron', sans-serif; font-size: 10px; color: #fff;
@@ -111,6 +112,7 @@
       padding: 14px 35px; font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2px;
       cursor: pointer; transition: all 0.2s; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
       margin: 5px; min-width: 220px; text-align: center;
+      touch-action: manipulation; /* Removes 300ms delay on mobile */
     }
     .menu-btn:active { background: var(--accent); color: #000; border-color: var(--accent); box-shadow: 0 0 20px var(--accent); transform: scale(0.98); }
     .menu-btn:disabled { opacity: 0.5; pointer-events: none; }
@@ -122,7 +124,7 @@
     .diff-btn.hard { border-color: var(--hard); color: var(--hard); }
     .diff-btn.hard:active { background: var(--hard); color: #000; box-shadow: 0 0 20px var(--hard); }
 
-    .shop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; width: 100%; max-width: 600px; margin: 20px 0; }
+    .shop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; width: 100%; max-width: 600px; margin: 20px 0; }
     .shop-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); padding: 15px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden;}
     .shop-item:active { background: rgba(157, 78, 221, 0.2); border-color: var(--void); }
     .shop-item.owned { border-color: var(--easy); background: rgba(0, 255, 136, 0.05); pointer-events: none; opacity: 0.7; }
@@ -134,18 +136,33 @@
     .equipped-badge { position: absolute; top: 5px; right: 5px; background: var(--accent); color: #000; font-size: 8px; padding: 2px 4px; font-weight: bold; }
 
     .level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; width: 100%; max-width: 320px; margin: 15px 0; }
-    .level-btn { aspect-ratio: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.6); font-family: 'Orbitron', sans-serif; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+    .level-btn { aspect-ratio: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.6); font-family: 'Orbitron', sans-serif; font-size: 14px; cursor: pointer; transition: all 0.2s; touch-action: manipulation; }
     .level-btn.locked { opacity: 0.3; pointer-events: none; }
     .level-btn.current { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 10px var(--accent); }
 
     .hud-message { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-family: 'Orbitron', sans-serif; font-size: clamp(24px, 6vw, 48px); font-weight: 900; pointer-events: none; opacity: 0; transition: opacity 0.2s; text-shadow: 0 0 20px currentColor; z-index: 20; }
     .header-small { font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 2px; color: var(--accent); margin-bottom: 5px; }
 
-    /* Ship Preview in Garage */
+    /* Ship Preview */
     .ship-preview { width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; position: relative; background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%); border-radius: 50%; }
     .ship-preview canvas { width: 100%; height: 100%; }
 
-    @media (max-width: 400px) { .shop-grid { grid-template-columns: 1fr 1fr; } }
+    /* Mobile Specific Adjustments */
+    @media (max-width: 400px) {
+      .shop-grid { grid-template-columns: 1fr 1fr; }
+      .menu-btn { min-width: 180px; padding: 12px 20px; font-size: 12px; }
+      .top-bar { padding: 10px 5px; }
+    }
+    
+    @media (max-width: 360px) {
+      .level-grid { max-width: 280px; gap: 5px; }
+      h1 { font-size: 20px; }
+    }
+
+    /* Reduce CRT effect intensity on mobile for better visibility */
+    @media (max-width: 600px) {
+      #crt-overlay { opacity: 0.15; }
+    }
   </style>
 </head>
 <body>
@@ -260,7 +277,7 @@
 <script>
 /**
  * VOID RUNNER: PROTOCOL X
- * Features: Realistic Ships, Parallax BG, Close Calls, Powerups.
+ * Mobile-Optimized Version
  */
 
 // --- CONFIGURATION ---
@@ -286,19 +303,17 @@ let score = 0, highScore = 0, credits = 0;
 let currentLevel = 1, currentDifficulty = 'normal', maxLevel = 20; 
 let frame = 0, speed = 6, shake = 0;
 let targetsCollected = 0, targetsRequired = 0;
-let timeScale = 1.0; // For slow motion
+let timeScale = 1.0;
 
-// Active Powerup state
 let activePowerup = { type: null, timer: 0 };
 
-// Upgrades Object
 const upg = {
   magnet: { level: 0, cost: 100, inc: 50, desc: "Attract essence." },
   shield: { level: 0, cost: 200, inc: 100, desc: "Absorb hits." },
   multi: { level: 0, cost: 150, inc: 75, desc: "Gain 15% more." }
 };
 
-// --- 10 REALISTIC SHIP DEFINITIONS ---
+// --- SHIPS ---
 const SHIPS = {
   viper: { 
     id: 'viper', name: 'VIPER', cost: 0, owned: true, desc: "Standard combat frame.",
@@ -457,8 +472,18 @@ function init() {
   loadSave();
   setupUI();
   createPools();
+  
+  // Desktop input
   window.addEventListener('mousedown', input);
-  window.addEventListener('touchstart', e => { e.preventDefault(); input(); }, {passive: false});
+  
+  // Mobile input - FIX: Only prevent default if game is playing to allow button clicks
+  window.addEventListener('touchstart', e => {
+    if (state === STATE.PLAY) {
+      e.preventDefault();
+      input();
+    }
+  }, {passive: false});
+  
   window.addEventListener('resize', resize);
   requestAnimationFrame(loop);
 }
@@ -470,20 +495,18 @@ function createPools() {
   for(let i=0; i<15; i++) pools.orb.push({x:0,y:0,active:false,val:1});
   for(let i=0; i<5; i++) pools.laser.push({x:0,y:0,active:false,on:false,timer:0,duration:0,dir:1});
   for(let i=0; i<5; i++) pools.target.push({x:0,y:0,active:false});
-  for(let i=0; i<3; i++) pools.powerup.push({x:0,y:0,type:0,active:false}); // New pool
-  // Stars for parallax
+  for(let i=0; i<3; i++) pools.powerup.push({x:0,y:0,type:0,active:false});
   for(let i=0; i<30; i++) pools.star.push({x:0,y:0,s:0,speed:0,layer:0}); 
 }
 
 function resize() {
   c.width = W(); c.height = H();
-  // Init stars
   pools.star.forEach(b => { 
-    b.layer = Math.floor(Math.random() * 3) + 1; // Layers 1, 2, 3
+    b.layer = Math.floor(Math.random() * 3) + 1;
     b.x = Math.random() * W(); 
     b.y = Math.random() * H(); 
-    b.s = (Math.random() * 2 + 0.5) * (b.layer * 0.3); // Closer layers are larger
-    b.speed = b.layer * 0.5; // Closer layers move faster
+    b.s = (Math.random() * 2 + 0.5) * (b.layer * 0.3);
+    b.speed = b.layer * 0.5;
   });
 }
 
@@ -520,15 +543,17 @@ function saveGame() {
 }
 
 function playSound(type, freq=440) {
-  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if(audioCtx.state === 'suspended') audioCtx.resume();
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.connect(gain); gain.connect(audioCtx.destination);
-  osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-  gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
-  osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+  try {
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+  } catch(e) {}
 }
 
 function startGame() {
@@ -569,13 +594,11 @@ function update() {
   if(state !== STATE.PLAY) return;
   const settings = DIFFICULTY_SETTINGS[currentDifficulty];
   
-  // Time scaling (slow motion)
   const dt = timeScale;
   
   frame++;
   speed = Math.min(speed + 0.003 * dt, CFG.maxSpeed);
   
-  // Powerup timer
   if(activePowerup.timer > 0) {
     activePowerup.timer -= dt;
     if(activePowerup.timer <= 0) {
@@ -605,11 +628,10 @@ function update() {
   const spawnRate = Math.floor(baseSpawnRate * settings.spawnMod);
   if(frame % spawnRate === 0) spawnObstacle();
   if(frame % 40 === 0) spawnOrb();
-  if(frame % 300 === 0) spawnPowerup(); // Spawn powerups rarely
+  if(frame % 300 === 0) spawnPowerup();
   if(targetsCollected < targetsRequired && frame % 60 === 0) spawnTarget();
   if(settings.lasers && currentLevel > 2 && frame % 150 === 0) spawnLaser();
   
-  // Stars Parallax
   pools.star.forEach(b => { b.x -= speed * b.speed * dt; if(b.x < 0) b.x = W(); });
   
   pools.obstacle.forEach(o => {
@@ -621,16 +643,12 @@ function update() {
     const topEdge = o.y - halfGap;
     const botEdge = o.y + halfGap;
     
-    // Interaction
     if(P.x + CFG.playerSize > o.x && P.x - CFG.playerSize < o.x + o.w) {
-      // Inside obstacle column X range
-      
-      // 1. Check for "Close Call" (only if not dashing and not inside the gap)
       const distTop = Math.abs(P.y - topEdge);
       const distBot = Math.abs(P.y - botEdge);
       
       if (distTop < CFG.closeCallDist || distBot < CFG.closeCallDist) {
-         if(!o.passedCloseCall) { // Trigger once per obstacle
+         if(!o.passedCloseCall) {
            if(!P.isDashing && P.shieldHits === 0) {
                addScore(50 * (activePowerup.type === 'score' ? 2 : 1));
                spawnParticles(P.x, P.y, 5, '#ffaa00');
@@ -639,11 +657,9 @@ function update() {
            }
            o.passedCloseCall = true;
          }
-         // Grinding logic
          if(P.isDashing) { P.dash += 2 * dt; spawnParticles(P.x, P.y, 1, '#ffaa00'); }
       }
       
-      // 2. Check for Collision
       if(P.y - CFG.playerSize < topEdge || P.y + CFG.playerSize > botEdge) {
         if(P.isDashing) {
           spawnParticles(P.x, P.y, 10, '#fff'); o.active = false; playSound('square', 100);
@@ -665,7 +681,6 @@ function update() {
     if(!t.active) return;
     t.x -= speed * dt;
     const dist = Math.hypot(P.x - t.x, P.y - t.y);
-    // Super Magnet Powerup affects targets too
     if(dist < 200 && activePowerup.type === 'magnet') { const angle = Math.atan2(P.y - t.y, P.x - t.x); t.x += Math.cos(angle) * 5; t.y += Math.sin(angle) * 5; }
     else if(dist < 60 + upg.magnet.level * 10) { const angle = Math.atan2(P.y - t.y, P.x - t.x); t.x += Math.cos(angle) * 2; t.y += Math.sin(angle) * 2; }
     
@@ -676,7 +691,6 @@ function update() {
   pools.orb.forEach(o => {
     if(!o.active) return; o.x -= speed * dt;
     const dist = Math.hypot(P.x - o.x, P.y - o.y);
-    // Super Magnet Powerup
     if(dist < 300 && activePowerup.type === 'magnet') { const angle = Math.atan2(P.y - o.y, P.x - o.x); o.x += Math.cos(angle) * 8; o.y += Math.sin(angle) * 8; }
     else {
       const magnetRange = 50 + (upg.magnet.level * 60);
@@ -686,7 +700,6 @@ function update() {
     if(o.x < -20) o.active = false;
   });
   
-  // Powerups
   pools.powerup.forEach(p => {
     if(!p.active) return;
     p.x -= speed * dt;
@@ -718,7 +731,7 @@ function activatePowerup(type) {
   const types = ['score', 'magnet', 'slow'];
   const names = ['2X SCORE', 'SUPER MAGNET', 'TIME DILATION'];
   activePowerup.type = types[type];
-  activePowerup.timer = 300; // 5 seconds at 60fps
+  activePowerup.timer = 300;
   
   const ui = document.getElementById('active-powerup-ui');
   ui.innerText = names[type];
@@ -729,7 +742,7 @@ function spawnObstacle() { const o = pools.obstacle.find(x => !x.active); if(!o)
 function spawnTarget() { const t = pools.target.find(x => !x.active); if(!t) return; t.active = true; t.x = W() + 100; t.y = 100 + Math.random() * (H() - 200); }
 function spawnOrb() { const o = pools.orb.find(x => !x.active); if(!o) return; o.active = true; o.x = W() + 50 + Math.random() * 200; o.y = Math.random() * (H() - 100) + 50; o.val = Math.random() > 0.9 ? 5 : 1; }
 function spawnLaser() { const l = pools.laser.find(x => !x.active); if(!l) return; l.active = true; l.on = true; l.timer = 0; l.x = W() + 100; l.y = 0; l.dir = Math.floor(Math.random() * 3); }
-function spawnPowerup() { const p = pools.powerup.find(x => !x.active); if(!p) return; p.active = true; p.x = W() + 100; p.y = 100 + Math.random() * (H() - 200); p.type = Math.floor(Math.random() * 3); } // 0: score, 1: magnet, 2: slow
+function spawnPowerup() { const p = pools.powerup.find(x => !x.active); if(!p) return; p.active = true; p.x = W() + 100; p.y = 100 + Math.random() * (H() - 200); p.type = Math.floor(Math.random() * 3); }
 function spawnParticles(x, y, count, color) { for(let i=0; i<count; i++) { const p = pools.particle.find(pt => pt.life <= 0); if(p) { p.x = x; p.y = y; p.vx = (Math.random() - 0.5) * 6; p.vy = (Math.random() - 0.5) * 6; p.life = 1; p.c = color; p.s = Math.random() * 3 + 1; } } }
 function addScore(v) { score += v; if(score > highScore) highScore = score; }
 function showMessage(text, color) { const el = document.getElementById('hud-msg'); el.innerText = text; el.style.color = color; el.style.opacity = 1; setTimeout(() => el.style.opacity = 0, 400); }
@@ -758,7 +771,6 @@ function render() {
   if(shake > 0) { ctx.translate(Math.random()*shake, Math.random()*shake); shake *= 0.9; }
   ctx.fillStyle = '#05050a'; ctx.fillRect(0, 0, W(), H());
   
-  // Render Stars (Parallax)
   pools.star.forEach(b => { 
     ctx.fillStyle = `rgba(255,255,255,${0.2 * b.layer})`; 
     ctx.fillRect(b.x, b.y, b.s, b.s); 
