@@ -35,6 +35,16 @@
       color: white;
     }
     
+    /* CRT Scanline Overlay for "Attractive" retro feel */
+    #crt-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      background-size: 100% 2px, 3px 100%;
+      pointer-events: none;
+      z-index: 11; /* Above canvas, below UI */
+      opacity: 0.3;
+    }
+
     #game-container { position: relative; width: 100%; height: 100%; }
     canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     
@@ -67,6 +77,16 @@
       background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
       display: flex; flex-direction: column; align-items: center; gap: 10px;
     }
+    
+    /* Power-up display */
+    .active-powerup {
+      position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+      font-family: 'Orbitron', sans-serif; font-size: 10px; color: #fff;
+      background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 10px;
+      border: 1px solid var(--electric); color: var(--electric);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .active-powerup.visible { opacity: 1; }
 
     .ability-bar-container { width: min(250px, 70vw); display: flex; gap: 10px; align-items: center; }
     .ability-bar { flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); }
@@ -132,6 +152,7 @@
 
 <div id="game-container">
   <canvas id="c"></canvas>
+  <div id="crt-overlay"></div>
   
   <div class="ui-layer">
     <div class="top-bar">
@@ -154,6 +175,7 @@
     </div>
     
     <div class="hud-message" id="hud-msg"></div>
+    <div class="active-powerup" id="active-powerup-ui">2X SCORE</div>
 
     <div class="bottom-ui">
       <div class="ability-bar-container">
@@ -211,8 +233,9 @@
     <h1 style="font-size: 20px;">DATA LOG</h1>
     <div style="max-width: 300px; margin: 15px 0; text-align: left; font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.6;">
       <p><b style="color:var(--accent)">TAP:</b> Reverse Gravity.</p>
-      <p style="margin-top:10px"><b style="color:var(--boost)">DASH:</b> Limited 30s per run. Grind obstacles to charge.</p>
-      <p style="margin-top:10px"><b style="color:var(--electric)">TARGETS:</b> Collect nodes to clear. Amount increases with level.</p>
+      <p style="margin-top:10px"><b style="color:var(--boost)">DASH:</b> Limited 30s. Grind obstacles to charge.</p>
+      <p style="margin-top:10px"><b style="color:var(--danger)">CLOSE CALL:</b> Risk flying near obstacles for bonus points.</p>
+      <p style="margin-top:10px"><b style="color:var(--electric)">POWERUPS:</b><br>Score x2, Super Magnet, Time Dilation.</p>
     </div>
     <button class="menu-btn" id="btn-back-help" style="padding: 10px; min-width: 100px;">RETURN</button>
   </div>
@@ -237,7 +260,7 @@
 <script>
 /**
  * VOID RUNNER: PROTOCOL X
- * 10+ Realistic Ships + Garage.
+ * Features: Realistic Ships, Parallax BG, Close Calls, Powerups.
  */
 
 // --- CONFIGURATION ---
@@ -247,7 +270,8 @@ const CFG = {
   playerSize: 14,
   maxSpeed: 18,
   startSpeed: 6,
-  maxDashTime: 1800
+  maxDashTime: 1800, // 30s
+  closeCallDist: 25
 };
 
 const DIFFICULTY_SETTINGS = {
@@ -262,6 +286,10 @@ let score = 0, highScore = 0, credits = 0;
 let currentLevel = 1, currentDifficulty = 'normal', maxLevel = 20; 
 let frame = 0, speed = 6, shake = 0;
 let targetsCollected = 0, targetsRequired = 0;
+let timeScale = 1.0; // For slow motion
+
+// Active Powerup state
+let activePowerup = { type: null, timer: 0 };
 
 // Upgrades Object
 const upg = {
@@ -272,28 +300,21 @@ const upg = {
 
 // --- 10 REALISTIC SHIP DEFINITIONS ---
 const SHIPS = {
-  // 1. VIPER (Standard)
   viper: { 
     id: 'viper', name: 'VIPER', cost: 0, owned: true, desc: "Standard combat frame.",
     draw: (ctx, col, frame) => {
       const g = ctx.createLinearGradient(0, -18, 0, 18);
       g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, '#aaaaaa'); g.addColorStop(1, '#444444');
       ctx.fillStyle = g;
-      // Fuselage
       ctx.beginPath(); ctx.moveTo(28, 0); ctx.lineTo(15, -8); ctx.lineTo(-10, -10); ctx.lineTo(-20, -6); ctx.lineTo(-20, 6); ctx.lineTo(-10, 10); ctx.lineTo(15, 8); ctx.closePath(); ctx.fill();
-      // Wings
       ctx.fillStyle = '#888';
       ctx.beginPath(); ctx.moveTo(5, -8); ctx.lineTo(-15, -24); ctx.lineTo(-22, -24); ctx.lineTo(-18, -8); ctx.closePath(); ctx.fill();
       ctx.beginPath(); ctx.moveTo(5, 8); ctx.lineTo(-15, 24); ctx.lineTo(-22, 24); ctx.lineTo(-18, 8); ctx.closePath(); ctx.fill();
-      // Cockpit
       ctx.fillStyle = 'rgba(0, 255, 255, 0.6)'; ctx.beginPath(); ctx.ellipse(12, 0, 8, 4, 0, 0, Math.PI*2); ctx.fill();
-      // Engine
       ctx.shadowBlur = 15; ctx.shadowColor = col; ctx.fillStyle = col;
-      ctx.fillRect(-20, -3, 6, 2); ctx.fillRect(-20, 1, 6, 2);
-      ctx.shadowBlur = 0;
+      ctx.fillRect(-20, -3, 6, 2); ctx.fillRect(-20, 1, 6, 2); ctx.shadowBlur = 0;
     }
   },
-  // 2. RAZOR (Interceptor)
   razor: { 
     id: 'razor', name: 'RAZOR', cost: 500, owned: false, desc: "High-speed needle.",
     draw: (ctx, col, frame) => {
@@ -301,19 +322,14 @@ const SHIPS = {
       g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#222222');
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.moveTo(35, 0); ctx.lineTo(10, -4); ctx.lineTo(-10, -5); ctx.lineTo(-15, 0); ctx.lineTo(-10, 5); ctx.lineTo(10, 4); ctx.closePath(); ctx.fill();
-      // Side Engines
       ctx.fillStyle = '#555'; ctx.fillRect(-18, -10, 10, 4); ctx.fillRect(-18, 6, 10, 4);
-      // Winglets
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(-15, -14); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(-5, 5); ctx.lineTo(-15, 14); ctx.stroke();
-      // Thrust
       ctx.shadowBlur = 12; ctx.shadowColor = col; ctx.fillStyle = col;
-      ctx.fillRect(-20, -9, 5, 2); ctx.fillRect(-20, 7, 5, 2);
-      ctx.shadowBlur = 0;
+      ctx.fillRect(-20, -9, 5, 2); ctx.fillRect(-20, 7, 5, 2); ctx.shadowBlur = 0;
     }
   },
-  // 3. TITAN (Heavy)
   titan: { 
     id: 'titan', name: 'TITAN', cost: 1200, owned: false, desc: "Armored assault.",
     draw: (ctx, col, frame) => {
@@ -321,90 +337,66 @@ const SHIPS = {
       g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, '#888888'); g.addColorStop(1, '#222222');
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(12, -16); ctx.lineTo(-12, -18); ctx.lineTo(-20, -10); ctx.lineTo(-20, 10); ctx.lineTo(-12, 18); ctx.lineTo(12, 16); ctx.closePath(); ctx.fill();
-      // Panel Lines
       ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(-12, -18); ctx.lineTo(-12, 18); ctx.stroke();
-      // Bridge
       ctx.fillStyle = 'rgba(255, 100, 100, 0.8)'; ctx.fillRect(2, -4, 8, 8);
-      // Heavy Thrusters
       ctx.shadowBlur = 18; ctx.shadowColor = col; ctx.fillStyle = col;
       ctx.beginPath(); ctx.arc(-20, -6, 4, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(-20, 6, 4, 0, Math.PI*2); ctx.fill();
-      ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.arc(-20, 6, 4, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
     }
   },
-  // 4. WRAITH (Alien)
   wraith: { 
     id: 'wraith', name: 'WRAITH', cost: 2500, owned: false, desc: "Void-touched.",
     draw: (ctx, col, frame) => {
       ctx.fillStyle = '#111';
       ctx.beginPath(); ctx.moveTo(25, 0); ctx.quadraticCurveTo(20, -15, -10, -12); ctx.quadraticCurveTo(-15, 0, -10, 12); ctx.quadraticCurveTo(20, 15, 25, 0); ctx.fill();
-      // Energy Veins
       ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.shadowBlur = 5; ctx.shadowColor = col;
       ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-5, -10); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-5, 10); ctx.stroke();
-      // Core
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, 6 + Math.sin(frame * 0.2) * 2, 0, Math.PI*2); ctx.fill();
-      ctx.shadowBlur = 0;
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, 6 + Math.sin(frame * 0.2) * 2, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
     }
   },
-  // 5. SPECTER (Stealth)
   specter: { 
     id: 'specter', name: 'SPECTER', cost: 800, owned: false, desc: "Stealth recon.",
     draw: (ctx, col, frame) => {
-      // Flat angular shape
       const g = ctx.createLinearGradient(0, -15, 0, 15);
       g.addColorStop(0, '#555555'); g.addColorStop(1, '#111111');
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.moveTo(25, 0); ctx.lineTo(10, -4); ctx.lineTo(-20, -12); ctx.lineTo(-15, 0); ctx.lineTo(-20, 12); ctx.lineTo(10, 4);
       ctx.closePath(); ctx.fill();
-      // Glow slit
       ctx.shadowBlur = 10; ctx.shadowColor = col; ctx.fillStyle = col;
-      ctx.fillRect(-18, -1, 30, 2);
-      ctx.shadowBlur = 0;
+      ctx.fillRect(-18, -1, 30, 2); ctx.shadowBlur = 0;
     }
   },
-  // 6. GOLIATH (Industrial)
   goliath: { 
     id: 'goliath', name: 'GOLIATH', cost: 1500, owned: false, desc: "Industrial hauler.",
     draw: (ctx, col, frame) => {
       const g = ctx.createLinearGradient(-20, -20, 20, 20);
       g.addColorStop(0, '#cccccc'); g.addColorStop(1, '#555555');
       ctx.fillStyle = g;
-      // Main Block
       ctx.fillRect(-18, -14, 36, 28);
-      // Cargo Pods
       ctx.fillStyle = '#444';
       ctx.fillRect(-22, -20, 10, 8); ctx.fillRect(-22, 12, 10, 8);
-      // Engine Grills
       ctx.fillStyle = col; ctx.shadowBlur = 15; ctx.shadowColor = col;
-      ctx.fillRect(-22, -10, 4, 20);
-      ctx.shadowBlur = 0;
-      // Cockpit
+      ctx.fillRect(-22, -10, 4, 20); ctx.shadowBlur = 0;
       ctx.fillStyle = '#222'; ctx.fillRect(10, -6, 8, 12);
     }
   },
-  // 7. KESTREL (Agile)
   kestrel: { 
     id: 'kestrel', name: 'KESTREL', cost: 950, owned: false, desc: "Forward-sweep wing.",
     draw: (ctx, col, frame) => {
       const g = ctx.createLinearGradient(0, -20, 0, 20);
       g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#666666');
       ctx.fillStyle = g;
-      // Body
       ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(12, -6); ctx.lineTo(-12, -6); ctx.lineTo(-15, 0); ctx.lineTo(-12, 6); ctx.lineTo(12, 6); ctx.closePath(); ctx.fill();
-      // Forward Wings
       ctx.fillStyle = '#aaa';
       ctx.beginPath(); ctx.moveTo(-12, -6); ctx.lineTo(5, -20); ctx.lineTo(10, -20); ctx.lineTo(5, -6); ctx.closePath(); ctx.fill();
       ctx.beginPath(); ctx.moveTo(-12, 6); ctx.lineTo(5, 20); ctx.lineTo(10, 20); ctx.lineTo(5, 6); ctx.closePath(); ctx.fill();
-      // Engines
       ctx.shadowBlur = 10; ctx.shadowColor = col; ctx.fillStyle = col;
-      ctx.fillRect(-15, -2, 4, 4);
-      ctx.shadowBlur = 0;
+      ctx.fillRect(-15, -2, 4, 4); ctx.shadowBlur = 0;
     }
   },
-  // 8. BARRACUDA (Aggressive)
   barracuda: { 
     id: 'barracuda', name: 'BARRACUDA', cost: 1100, owned: false, desc: "Jagged fins.",
     draw: (ctx, col, frame) => {
@@ -414,17 +406,13 @@ const SHIPS = {
       ctx.beginPath();
       ctx.moveTo(30, 0); ctx.lineTo(10, -5); ctx.lineTo(0, -15); ctx.lineTo(-15, -8); ctx.lineTo(-20, 0); ctx.lineTo(-15, 8); ctx.lineTo(0, 15); ctx.lineTo(10, 5);
       ctx.closePath(); ctx.fill();
-      // Spikes
       ctx.fillStyle = '#880000';
       ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(-5, -25); ctx.lineTo(5, -15); ctx.fill();
       ctx.beginPath(); ctx.moveTo(0, 15); ctx.lineTo(-5, 25); ctx.lineTo(5, 15); ctx.fill();
-      // Engine
       ctx.shadowBlur = 15; ctx.shadowColor = col; ctx.fillStyle = col;
-      ctx.fillRect(-20, -3, 5, 6);
-      ctx.shadowBlur = 0;
+      ctx.fillRect(-20, -3, 5, 6); ctx.shadowBlur = 0;
     }
   },
-  // 9. ORACLE (Tech)
   oracle: { 
     id: 'oracle', name: 'ORACLE', cost: 3000, owned: false, desc: "Sensor array.",
     draw: (ctx, col, frame) => {
@@ -432,31 +420,23 @@ const SHIPS = {
       g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#333333');
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI*2); ctx.fill();
-      // Ring
       ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.shadowBlur = 5; ctx.shadowColor = col;
       ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI*2); ctx.stroke();
-      // Eye
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(5, 0, 5, 0, Math.PI*2); ctx.fill();
-      ctx.shadowBlur = 0;
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(5, 0, 5, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
     }
   },
-  // 10. MANTIS (Insectoid)
   mantis: { 
     id: 'mantis', name: 'MANTIS', cost: 1800, owned: false, desc: "Bio-hull.",
     draw: (ctx, col, frame) => {
       const g = ctx.createLinearGradient(0, -18, 0, 18);
       g.addColorStop(0, '#88ff88'); g.addColorStop(1, '#003300');
       ctx.fillStyle = g;
-      // Body
       ctx.beginPath(); ctx.moveTo(25, 0); ctx.lineTo(15, -6); ctx.lineTo(-10, -8); ctx.lineTo(-15, 0); ctx.lineTo(-10, 8); ctx.lineTo(15, 6); ctx.closePath(); ctx.fill();
-      // Legs
       ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(10, -6); ctx.lineTo(20, -20); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(10, 6); ctx.lineTo(20, 20); ctx.stroke();
-      // Thrusters
       ctx.shadowBlur = 10; ctx.shadowColor = col; ctx.fillStyle = col;
-      ctx.fillRect(-15, -4, 4, 8);
-      ctx.shadowBlur = 0;
+      ctx.fillRect(-15, -4, 4, 8); ctx.shadowBlur = 0;
     }
   }
 };
@@ -467,7 +447,7 @@ let progress = { easy: 1, normal: 1, hard: 1 };
 const c = document.getElementById('c');
 const ctx = c.getContext('2d');
 const W = () => window.innerWidth, H = () => window.innerHeight;
-const pools = { obstacle: [], orb: [], particle: [], trail: [], laser: [], bg: [], target: [] };
+const pools = { obstacle: [], orb: [], particle: [], trail: [], laser: [], target: [], powerup: [], star: [] };
 let P = {};
 let audioCtx = null;
 
@@ -489,13 +469,22 @@ function createPools() {
   for(let i=0; i<10; i++) pools.obstacle.push({x:0,y:0,w:0,gap:0,active:false,passed:false,type:0,phase:0,vy:0});
   for(let i=0; i<15; i++) pools.orb.push({x:0,y:0,active:false,val:1});
   for(let i=0; i<5; i++) pools.laser.push({x:0,y:0,active:false,on:false,timer:0,duration:0,dir:1});
-  for(let i=0; i<10; i++) pools.bg.push({x:0,y:0,s:0,speed:0});
   for(let i=0; i<5; i++) pools.target.push({x:0,y:0,active:false});
+  for(let i=0; i<3; i++) pools.powerup.push({x:0,y:0,type:0,active:false}); // New pool
+  // Stars for parallax
+  for(let i=0; i<30; i++) pools.star.push({x:0,y:0,s:0,speed:0,layer:0}); 
 }
 
 function resize() {
   c.width = W(); c.height = H();
-  pools.bg.forEach(b => { b.x = Math.random() * W(); b.y = Math.random() * H(); b.s = Math.random() * 2 + 0.5; b.speed = Math.random() * 0.5 + 0.2; });
+  // Init stars
+  pools.star.forEach(b => { 
+    b.layer = Math.floor(Math.random() * 3) + 1; // Layers 1, 2, 3
+    b.x = Math.random() * W(); 
+    b.y = Math.random() * H(); 
+    b.s = (Math.random() * 2 + 0.5) * (b.layer * 0.3); // Closer layers are larger
+    b.speed = b.layer * 0.5; // Closer layers move faster
+  });
 }
 
 function loadSave() {
@@ -549,7 +538,9 @@ function startGame() {
   targetsCollected = 0;
   targetsRequired = settings.baseTargets + currentLevel;
   speed = (CFG.startSpeed + (currentLevel * 0.5)) * settings.speedMod;
-  shake = 0; frame = 0;
+  shake = 0; frame = 0; timeScale = 1.0;
+  activePowerup = { type: null, timer: 0 };
+  
   document.documentElement.style.setProperty('--accent', settings.color);
   P = {
     x: W() * 0.2, y: H() / 2, vy: 0, dir: 1,
@@ -577,36 +568,83 @@ function input() {
 function update() {
   if(state !== STATE.PLAY) return;
   const settings = DIFFICULTY_SETTINGS[currentDifficulty];
+  
+  // Time scaling (slow motion)
+  const dt = timeScale;
+  
   frame++;
-  speed = Math.min(speed + 0.003, CFG.maxSpeed);
-  P.vy += CFG.gravity * P.dir;
-  P.y += P.vy;
+  speed = Math.min(speed + 0.003 * dt, CFG.maxSpeed);
+  
+  // Powerup timer
+  if(activePowerup.timer > 0) {
+    activePowerup.timer -= dt;
+    if(activePowerup.timer <= 0) {
+      activePowerup.type = null;
+      document.getElementById('active-powerup-ui').classList.remove('visible');
+    }
+    if(activePowerup.type === 'slow') timeScale = 0.5;
+    else timeScale = 1.0;
+  } else {
+    timeScale = 1.0;
+  }
+
+  P.vy += CFG.gravity * P.dir * dt;
+  P.y += P.vy * dt;
   const targetAngle = Math.atan2(P.vy, speed) * 0.5;
-  P.angle += (targetAngle - P.angle) * 0.1;
-  if (P.dashTimeRemaining > 0) P.dashTimeRemaining--;
+  P.angle += (targetAngle - P.angle) * 0.1 * dt;
+  
+  if (P.dashTimeRemaining > 0) P.dashTimeRemaining -= dt;
+  
   if(P.dash > 100 && !P.isDashing && P.dashTimeRemaining > 0) { P.isDashing = true; P.dashCooldown = 20; playSound('sawtooth', 150); showMessage("DASH", "#ffaa00"); }
-  if(P.isDashing) { P.dashCooldown--; spawnParticles(P.x, P.y, 2, '#ffaa00'); if(P.dashCooldown <= 0) P.isDashing = false; }
-  if(P.dash < 100 && P.dashTimeRemaining > 0) P.dash += 0.1; 
+  if(P.isDashing) { P.dashCooldown -= dt; spawnParticles(P.x, P.y, 2, '#ffaa00'); if(P.dashCooldown <= 0) P.isDashing = false; }
+  if(P.dash < 100 && P.dashTimeRemaining > 0) P.dash += 0.1 * dt; 
+  
   if(P.y < 0 || P.y > H()) { die(); return; }
+  
   const baseSpawnRate = Math.max(60, 120 - currentLevel * 5);
   const spawnRate = Math.floor(baseSpawnRate * settings.spawnMod);
   if(frame % spawnRate === 0) spawnObstacle();
   if(frame % 40 === 0) spawnOrb();
+  if(frame % 300 === 0) spawnPowerup(); // Spawn powerups rarely
   if(targetsCollected < targetsRequired && frame % 60 === 0) spawnTarget();
   if(settings.lasers && currentLevel > 2 && frame % 150 === 0) spawnLaser();
   
+  // Stars Parallax
+  pools.star.forEach(b => { b.x -= speed * b.speed * dt; if(b.x < 0) b.x = W(); });
+  
   pools.obstacle.forEach(o => {
     if(!o.active) return;
-    o.x -= speed;
-    if(o.type === 1) { o.phase += 0.05; o.y += Math.sin(o.phase) * 2; }
+    o.x -= speed * dt;
+    if(o.type === 1) { o.phase += 0.05 * dt; o.y += Math.sin(o.phase) * 2; }
+    
     const halfGap = o.gap / 2;
     const topEdge = o.y - halfGap;
     const botEdge = o.y + halfGap;
+    
+    // Interaction
     if(P.x + CFG.playerSize > o.x && P.x - CFG.playerSize < o.x + o.w) {
-      if(Math.abs(P.y - topEdge) < 15 || Math.abs(P.y - botEdge) < 15) {
-        P.dash += 2; spawnParticles(P.x, P.y, 1, '#ffaa00');
+      // Inside obstacle column X range
+      
+      // 1. Check for "Close Call" (only if not dashing and not inside the gap)
+      const distTop = Math.abs(P.y - topEdge);
+      const distBot = Math.abs(P.y - botEdge);
+      
+      if (distTop < CFG.closeCallDist || distBot < CFG.closeCallDist) {
+         if(!o.passedCloseCall) { // Trigger once per obstacle
+           if(!P.isDashing && P.shieldHits === 0) {
+               addScore(50 * (activePowerup.type === 'score' ? 2 : 1));
+               spawnParticles(P.x, P.y, 5, '#ffaa00');
+               showMessage("CLOSE CALL", "#ffaa00");
+               playSound('triangle', 800);
+           }
+           o.passedCloseCall = true;
+         }
+         // Grinding logic
+         if(P.isDashing) { P.dash += 2 * dt; spawnParticles(P.x, P.y, 1, '#ffaa00'); }
       }
-      else if(P.y - CFG.playerSize < topEdge || P.y + CFG.playerSize > botEdge) {
+      
+      // 2. Check for Collision
+      if(P.y - CFG.playerSize < topEdge || P.y + CFG.playerSize > botEdge) {
         if(P.isDashing) {
           spawnParticles(P.x, P.y, 10, '#fff'); o.active = false; playSound('square', 100);
         } else if (P.shieldHits > 0) {
@@ -619,41 +657,79 @@ function update() {
         }
       }
     }
-    if(!o.passed && o.x + o.w < P.x) { o.passed = true; addScore(10); }
+    if(!o.passed && o.x + o.w < P.x) { o.passed = true; addScore(10 * (activePowerup.type === 'score' ? 2 : 1)); }
     if(o.x < -100) o.active = false;
   });
+  
   pools.target.forEach(t => {
     if(!t.active) return;
-    t.x -= speed;
+    t.x -= speed * dt;
     const dist = Math.hypot(P.x - t.x, P.y - t.y);
-    if(dist < 60 + upg.magnet.level * 10) { const angle = Math.atan2(P.y - t.y, P.x - t.x); t.x += Math.cos(angle) * 2; t.y += Math.sin(angle) * 2; }
-    if(dist < CFG.playerSize + 12) { t.active = false; targetsCollected++; score += 50; const bonus = Math.ceil(10 * (1 + upg.multi.level * 0.15)); credits += bonus; spawnParticles(t.x, t.y, 10, '#7df9ff'); playSound('sine', 600); if(targetsCollected >= targetsRequired) winLevel(); }
+    // Super Magnet Powerup affects targets too
+    if(dist < 200 && activePowerup.type === 'magnet') { const angle = Math.atan2(P.y - t.y, P.x - t.x); t.x += Math.cos(angle) * 5; t.y += Math.sin(angle) * 5; }
+    else if(dist < 60 + upg.magnet.level * 10) { const angle = Math.atan2(P.y - t.y, P.x - t.x); t.x += Math.cos(angle) * 2; t.y += Math.sin(angle) * 2; }
+    
+    if(dist < CFG.playerSize + 12) { t.active = false; targetsCollected++; score += 50 * (activePowerup.type === 'score' ? 2 : 1); const bonus = Math.ceil(10 * (1 + upg.multi.level * 0.15)); credits += bonus; spawnParticles(t.x, t.y, 10, '#7df9ff'); playSound('sine', 600); if(targetsCollected >= targetsRequired) winLevel(); }
     if(t.x < -20) t.active = false;
   });
+  
   pools.orb.forEach(o => {
-    if(!o.active) return; o.x -= speed;
+    if(!o.active) return; o.x -= speed * dt;
     const dist = Math.hypot(P.x - o.x, P.y - o.y);
-    const magnetRange = 50 + (upg.magnet.level * 60);
-    if(dist < magnetRange) { const angle = Math.atan2(P.y - o.y, P.x - o.x); o.x += Math.cos(angle) * upg.magnet.level * 1.5; o.y += Math.sin(angle) * upg.magnet.level * 1.5; }
-    if(dist < CFG.playerSize + 10) { o.active = false; const bonus = Math.ceil(o.val * (1 + upg.multi.level * 0.15)); credits += bonus; score += 5; spawnParticles(o.x, o.y, 5, '#9d4edd'); playSound('sine', 880); }
+    // Super Magnet Powerup
+    if(dist < 300 && activePowerup.type === 'magnet') { const angle = Math.atan2(P.y - o.y, P.x - o.x); o.x += Math.cos(angle) * 8; o.y += Math.sin(angle) * 8; }
+    else {
+      const magnetRange = 50 + (upg.magnet.level * 60);
+      if(dist < magnetRange) { const angle = Math.atan2(P.y - o.y, P.x - o.x); o.x += Math.cos(angle) * upg.magnet.level * 1.5; o.y += Math.sin(angle) * upg.magnet.level * 1.5; }
+    }
+    if(dist < CFG.playerSize + 10) { o.active = false; const bonus = Math.ceil(o.val * (1 + upg.multi.level * 0.15)); credits += bonus; score += 5 * (activePowerup.type === 'score' ? 2 : 1); spawnParticles(o.x, o.y, 5, '#9d4edd'); playSound('sine', 880); }
     if(o.x < -20) o.active = false;
   });
+  
+  // Powerups
+  pools.powerup.forEach(p => {
+    if(!p.active) return;
+    p.x -= speed * dt;
+    const dist = Math.hypot(P.x - p.x, P.y - p.y);
+    if(dist < CFG.playerSize + 15) {
+      p.active = false;
+      activatePowerup(p.type);
+      playSound('sine', 1200);
+      spawnParticles(p.x, p.y, 15, '#ffffff');
+    }
+    if(p.x < -20) p.active = false;
+  });
+
   pools.laser.forEach(l => {
-    if(!l.active) return; l.x -= speed * 0.8; l.timer++;
+    if(!l.active) return;
+    l.x -= speed * 0.8 * dt; l.timer += dt;
     if(l.timer > 60) l.on = false; if(l.timer > 90) { l.timer = 0; l.on = true; }
     if(l.on && P.x > l.x - 5 && P.x < l.x + 5) { if(l.dir === 0 && P.y < H()/2) die(); if(l.dir === 1 && P.y > H()/2) die(); if(l.dir === 2) die(); }
     if(l.x < -50) l.active = false;
   });
-  pools.particle.forEach(p => { if(p.life > 0) { p.x += p.vx; p.y += p.vy; p.life -= 0.03; p.vx *= 0.98; } });
-  pools.trail.forEach(t => { if(t.life > 0) { t.life -= 0.05; t.x -= speed * 0.5; } });
+  
+  pools.particle.forEach(p => { if(p.life > 0) { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= 0.03; p.vx *= 0.98; } });
+  pools.trail.forEach(t => { if(t.life > 0) { t.life -= 0.05; t.x -= speed * 0.5 * dt; } });
   if(frame % 3 === 0) { const t = pools.trail.find(t => t.life <= 0); if(t) { t.x = P.x - 10; t.y = P.y; t.life = 1; } }
   updateUI();
 }
 
-function spawnObstacle() { const o = pools.obstacle.find(x => !x.active); if(!o) return; const settings = DIFFICULTY_SETTINGS[currentDifficulty]; const minGap = Math.max(120, 180 - currentLevel * 5) * settings.gapMod; const gap = minGap + Math.random() * 50; o.active = true; o.passed = false; o.x = W() + 50; o.y = Math.random() * (H() - gap - 100) + 50 + gap/2; o.w = 30 + Math.random() * 20; o.gap = gap; const movingChance = settings.movingChance || 0.2; o.type = Math.random() > (1 - movingChance) ? 1 : 0; o.phase = Math.random() * Math.PI * 2; }
+function activatePowerup(type) {
+  const types = ['score', 'magnet', 'slow'];
+  const names = ['2X SCORE', 'SUPER MAGNET', 'TIME DILATION'];
+  activePowerup.type = types[type];
+  activePowerup.timer = 300; // 5 seconds at 60fps
+  
+  const ui = document.getElementById('active-powerup-ui');
+  ui.innerText = names[type];
+  ui.classList.add('visible');
+}
+
+function spawnObstacle() { const o = pools.obstacle.find(x => !x.active); if(!o) return; const settings = DIFFICULTY_SETTINGS[currentDifficulty]; const minGap = Math.max(120, 180 - currentLevel * 5) * settings.gapMod; const gap = minGap + Math.random() * 50; o.active = true; o.passed = false; o.passedCloseCall = false; o.x = W() + 50; o.y = Math.random() * (H() - gap - 100) + 50 + gap/2; o.w = 30 + Math.random() * 20; o.gap = gap; const movingChance = settings.movingChance || 0.2; o.type = Math.random() > (1 - movingChance) ? 1 : 0; o.phase = Math.random() * Math.PI * 2; }
 function spawnTarget() { const t = pools.target.find(x => !x.active); if(!t) return; t.active = true; t.x = W() + 100; t.y = 100 + Math.random() * (H() - 200); }
 function spawnOrb() { const o = pools.orb.find(x => !x.active); if(!o) return; o.active = true; o.x = W() + 50 + Math.random() * 200; o.y = Math.random() * (H() - 100) + 50; o.val = Math.random() > 0.9 ? 5 : 1; }
 function spawnLaser() { const l = pools.laser.find(x => !x.active); if(!l) return; l.active = true; l.on = true; l.timer = 0; l.x = W() + 100; l.y = 0; l.dir = Math.floor(Math.random() * 3); }
+function spawnPowerup() { const p = pools.powerup.find(x => !x.active); if(!p) return; p.active = true; p.x = W() + 100; p.y = 100 + Math.random() * (H() - 200); p.type = Math.floor(Math.random() * 3); } // 0: score, 1: magnet, 2: slow
 function spawnParticles(x, y, count, color) { for(let i=0; i<count; i++) { const p = pools.particle.find(pt => pt.life <= 0); if(p) { p.x = x; p.y = y; p.vx = (Math.random() - 0.5) * 6; p.vy = (Math.random() - 0.5) * 6; p.life = 1; p.c = color; p.s = Math.random() * 3 + 1; } } }
 function addScore(v) { score += v; if(score > highScore) highScore = score; }
 function showMessage(text, color) { const el = document.getElementById('hud-msg'); el.innerText = text; el.style.color = color; el.style.opacity = 1; setTimeout(() => el.style.opacity = 0, 400); }
@@ -681,10 +757,17 @@ function render() {
   ctx.save();
   if(shake > 0) { ctx.translate(Math.random()*shake, Math.random()*shake); shake *= 0.9; }
   ctx.fillStyle = '#05050a'; ctx.fillRect(0, 0, W(), H());
-  pools.bg.forEach(b => { b.x -= speed * b.speed; if(b.x < 0) b.x = W(); ctx.fillStyle = `rgba(255,255,255,${b.s/3})`; ctx.fillRect(b.x, b.y, b.s, b.s); });
+  
+  // Render Stars (Parallax)
+  pools.star.forEach(b => { 
+    ctx.fillStyle = `rgba(255,255,255,${0.2 * b.layer})`; 
+    ctx.fillRect(b.x, b.y, b.s, b.s); 
+  });
+  
   ctx.strokeStyle = `rgba(0,255,213,0.05)`; ctx.lineWidth = 1; const gridOffset = (frame * speed) % 80;
   for(let i = -gridOffset; i < W(); i+=80) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, H()); ctx.stroke(); }
-  renderList(pools.trail, 'trail'); renderList(pools.obstacle, 'obstacle'); renderList(pools.target, 'target'); renderList(pools.orb, 'orb'); renderList(pools.laser, 'laser'); renderList(pools.particle, 'particle');
+  
+  renderList(pools.trail, 'trail'); renderList(pools.obstacle, 'obstacle'); renderList(pools.target, 'target'); renderList(pools.orb, 'orb'); renderList(pools.powerup, 'powerup'); renderList(pools.laser, 'laser'); renderList(pools.particle, 'particle');
   if(state === STATE.PLAY) renderPlayer();
   ctx.restore();
 }
@@ -705,6 +788,15 @@ function renderList(list, type) {
     if(type === 'obstacle' && e.active) { ctx.fillStyle = e.type === 1 ? '#1a1a00' : '#111'; ctx.fillRect(e.x, 0, e.w, e.y - e.gap/2); ctx.fillRect(e.x, e.y + e.gap/2, e.w, H() - (e.y + e.gap/2)); ctx.fillStyle = e.type === 1 ? '#ffaa00' : DIFFICULTY_SETTINGS[currentDifficulty].color; ctx.fillRect(e.x, e.y - e.gap/2 - 4, e.w, 4); ctx.fillRect(e.x, e.y + e.gap/2, e.w, 4); }
     if(type === 'target' && e.active) { ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(frame * 0.05); ctx.shadowBlur = 15; ctx.shadowColor = '#7df9ff'; ctx.fillStyle = '#7df9ff'; ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(12, 0); ctx.lineTo(0, 12); ctx.lineTo(-12, 0); ctx.closePath(); ctx.fill(); ctx.restore(); }
     if(type === 'orb' && e.active) { ctx.fillStyle = e.val > 1 ? '#ff00ff' : '#9d4edd'; ctx.shadowBlur = 10; ctx.shadowColor = ctx.fillStyle; ctx.beginPath(); ctx.arc(e.x, e.y, 6 + Math.sin(frame * 0.1) * 2, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; }
+    if(type === 'powerup' && e.active) {
+      const colors = ['#00ff88', '#ffaa00', '#7df9ff'];
+      ctx.fillStyle = colors[e.type]; ctx.shadowBlur = 15; ctx.shadowColor = colors[e.type];
+      ctx.beginPath(); ctx.arc(e.x, e.y, 12, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#000'; ctx.font = 'bold 10px Orbitron'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const labels = ['x2', 'M', 'S'];
+      ctx.fillText(labels[e.type], e.x, e.y);
+      ctx.shadowBlur = 0;
+    }
     if(type === 'laser' && e.active) { if(e.on) { ctx.fillStyle = '#ff2d6a'; ctx.shadowBlur = 20; ctx.shadowColor = '#ff2d6a'; } else { ctx.fillStyle = 'rgba(255,45,106,0.2)'; ctx.shadowBlur = 0; } if(e.dir === 0) ctx.fillRect(e.x, 0, 6, H()/2); if(e.dir === 1) ctx.fillRect(e.x, H()/2, 6, H()/2); if(e.dir === 2) ctx.fillRect(e.x, 0, 6, H()); ctx.shadowBlur = 0; }
     if(type === 'particle' && e.life > 0) { ctx.globalAlpha = e.life; ctx.fillStyle = e.c; ctx.beginPath(); ctx.arc(e.x, e.y, e.s, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; }
   });
